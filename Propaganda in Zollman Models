@@ -1,0 +1,753 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Tue Aug  1 21:22:59 2023
+
+@author: 19199
+"""
+
+# -*- coding: utf-8 -*-
+"""
+Created on Sat Jul  8 13:07:21 2023
+
+@author: 19199
+"""
+
+#!/usr/bin/env python2.7
+import numpy as np
+from numpy.random import binomial, random
+from numpy import mean, std, divide, prod, power
+import csv
+import matplotlib.pyplot as plt
+from scipy.special import comb
+from tqdm import tqdm
+import csv
+import scipy.stats as stats
+
+
+class Propagandist:
+    def __init__(self, desiredbelief, propstrat):
+        #initiate the "results" list which will hold results from all scientists in each round
+        self.results = []
+        
+        #desiredbelief is the target probability that the propagandist wants to convince the policy makers is the true W2bvalue
+        self.desiredbelief = desiredbelief
+        
+        #degree of beliefW2 in World 2 (in which expected return for informative action is .5 + epsilon)
+        self.roundresults = []
+        
+        #people who propagandist can pull results from, all scientists are usually on this list
+        self.scifriends = []
+        
+        #people who propagandist tries to influence, all policymakers are usually on this list 
+        self.policyfriends = []
+        
+        #the list of results that the propagandist will give to policymakers to alter their opinions
+        self.curatedresults = []
+        
+        #initialize the strategy for this propagandist.  See below for details
+        if propstrat == "select":
+            self.propstrat = "select"
+        if propstrat == "none":
+            self.propstrat = "none"
+        if propstrat == "science":
+            self.propstrat = "science"
+            
+            
+    def selectshare(self, eps,n):
+        #iterate through all the results collected this round
+        for x in self.roundresults:
+            #if a result favors belief in desired world, then add it to the currated list for the policymakers
+            #this is an idealization.  Propagandist uses knowledge of actual P(b) for this
+            if abs(x - self.desiredbelief * n) < abs(x - (0.5 + eps)*n):
+                self.curatedresults.append(x)
+        #this makes the propagandist inert
+        if self.propstrat == "none":
+            self.curatedresults = []
+            
+    def propscience(self, propresources, propbinomn, eps):
+        #this is the same epsilon which sets the actual P(B)
+        self.epsilon = eps
+        self.results = []
+        self.curatedresults = []
+        #sets the number of spins the propagandist will make per publishable data
+        self.propbinomn = propbinomn
+        #sets the amount of total spins the propagandist can make per round
+        self.propresources = propresources
+        #propresources is given in units of n (spins)
+        #propbinomn is the n for each trial, so propresources/propbinomn is the number of spins
+        #print(propresources)
+        #print(propbinomn)
+        
+        for x in range( int(self.propresources / self.propbinomn)):
+            result = binomial(self.propbinomn, 0.5 + self.epsilon)
+            #create list of results
+            self.results.append(result)
+        #curate the list of results:
+        for x in self.results:
+            #if a result favors desired belief, then add it to the currated list for the policymakers
+            if abs(x - self.desiredbelief * self.propbinomn) < abs(x - (0.5 + eps)*self.propbinomn):
+                self.curatedresults.append(x)
+        
+        
+class PolicyMaker:
+    def __init__(self, alpha_initial, beta_initial, CI_lb, CI_ub):
+        #initialize the beta approximation values with the random priors
+        self.alpha_prior = alpha_initial
+        self.beta_prior = beta_initial
+        #initialize result [randomly determined in "Game.round()"]
+        self.result = None
+        
+        #initialize friends list [Game.trial() adds friends to list according to network]
+        #"friends" are scientists whose results are shared with the policymaker
+        self.friends = []
+        
+        #initialize the posterior beta aprox values
+        self.alpha_posterior = None
+        self.beta_posterior = None
+        
+        #first "belief" prior initialized, this is the mean of the beta distribution
+        self.belief = (self.alpha_prior) / (self.alpha_prior + self.beta_prior)
+        
+        self.posterior_distribution = None
+        #initializes pdf values
+        self.pdf_values = None
+        self.confidence_interval = None
+        
+        #this sets the credible interval bounds which are used for convergence and analysis
+        #eg: CI_lb = 0.025 ; CI_ub = 0.975 would represent a 95% credible interval
+        self.CI_lb = CI_lb
+        self.CI_ub = CI_ub
+        
+        #after initial "prior" is set, this sets the posterior values as priors
+        #allowing the update function to work identically for the first call and all subsequent calls
+        self.alpha_posterior = self.alpha_prior
+        self.beta_posterior = self.beta_prior
+        
+        
+    def update(self, n, eps,C):
+        #updates Scientist belief according to a beta approximation
+        
+        #incorporate binomial distribution values
+        self.n = n
+        self.eps = eps
+
+        #run through the friends list
+        for x in self.friends:
+            #if friend tested B, get it's data
+            if not x.result == None:
+                #updating alpha and beta parameters
+                self.alpha_posterior = self.alpha_prior + x.result
+                self.beta_posterior = self.beta_prior + self.n - x.result
+                #^this is bayesian inference, but thanks to beta distribution priors
+                #the posterior distribution is also a beta distribution
+                
+                #mean of the beta distribution after result
+                self.belief = (self.alpha_posterior) / (self.alpha_posterior + self.beta_posterior)
+                
+                #new prior is the old posterior
+                self.alpha_prior = self.alpha_posterior
+                self.beta_prior = self.beta_posterior
+                #self.prior_distribution = self.posterior_distribution
+    
+    #identical to update function, but using a list of float results provided by propagandist rather than a float            
+    def propUpdate(self, propbinomn, eps,C, propresults):
+        self.n = propbinomn
+        self.eps = eps
+        
+        #updates for propagandist result
+        for x in propresults:
+            self.alpha_posterior = self.alpha_prior + x
+            self.beta_posterior = self.beta_prior + self.n - x
+            self.belief = (self.alpha_posterior) / (self.alpha_posterior + self.beta_posterior)
+            
+            self.alpha_prior = self.alpha_posterior
+            self.beta_prior = self.beta_posterior
+            
+class Scientist:
+    def __init__(self, alpha_initial,beta_initial, CI_lb, CI_ub, eps, strat):   
+        
+        self.alpha_prior = alpha_initial
+        self.beta_prior = beta_initial
+
+        self.result = None
+        self.friends = []
+        self.belief = (self.alpha_prior) / (self.alpha_prior + self.beta_prior)
+        
+        self.CI_lb = CI_lb
+        self.CI_ub = CI_ub
+        
+        self.alpha_posterior = self.alpha_prior
+        self.beta_posterior = self.beta_prior
+        
+        self.strat = strat
+        
+    def updateNoShare(self,result,n,eps,C):
+        self.n = n
+        self.eps = eps
+        #this is the only difference of this function vs traditional update
+        #the result passed to this function affects the posterior distribution, but is not saved in the self.result
+        #as such, the "friends" will not see this "result"
+        result = result
+        
+        
+        if not result == None:
+            self.alpha_posterior = self.alpha_prior + result
+            self.beta_posterior = self.beta_prior + self.n - result
+            self.belief = (self.alpha_posterior) / (self.alpha_posterior + self.beta_posterior)
+            
+            self.alpha_prior = self.alpha_posterior
+            self.beta_prior = self.beta_posterior
+        
+    def update(self, n, eps,C):
+        self.n = n
+        self.eps = eps
+        
+        for x in self.friends:
+            if not x.result == None:
+                self.alpha_posterior = self.alpha_prior + x.result
+                self.beta_posterior = self.beta_prior + self.n - x.result
+                self.belief = (self.alpha_posterior) / (self.alpha_posterior + self.beta_posterior)
+                
+                self.alpha_prior = self.alpha_posterior
+                self.beta_prior = self.beta_posterior
+            
+
+class Game:
+    def __init__(self, popsize, network, binom_n, epsilon, policysize, sciconnections, propstrats, propbiasW, propresourcespercent, propbinomn, C,C2, prop2biasW, prop2resourcespercent, prop2binomn,sci_strat, sci_conf, sci_SD, portion_selecting):
+        
+        self.sci_conf = sci_conf
+        self.sci_SD = sci_SD
+        
+        #takes the credible interval and converts it to upper and lower bounds
+        #eg: 99% CI -> (0.005, 0.995)
+        self.CI_lb = round((1 - sci_conf)/2,4)
+        self.CI_ub = round(1 - (1-sci_conf)/2,4)
+        #print(f"lb: {self.CI_lb}, ub: {self.CI_ub}")
+        
+        self.popsize = popsize
+        self.policysize = policysize
+        self.network = network
+        self.sciconnections = round(sciconnections * popsize)
+        self.C = C
+        self.C2 = C2
+        #print(self.sciconnections)
+        
+        self.binom_n = binom_n
+        #binom_n = number of trials each round
+        self.epsilon = epsilon
+        
+        self.Scientists = []
+        self.policymakers = []
+            
+        #propstrat is the strategy of the propagandist (either selective sharing or propaganda science)
+        self.propstrats = propstrats
+        self.propstrat = propstrats[0]
+        self.prop2strat = propstrats[1]
+        
+        #propbias is the bias of the propagandist, W1 is 0.5-eps, W3 is 0.5+C*eps
+        #W2 would be actual truth, so it is not an option
+        self.propbiasW = propbiasW
+        if self.propbiasW == "W1":
+            self.propbias = 0.5 - self.epsilon
+        if self.propbiasW == "W3":
+            self.propbias = 0.5 + self.C * self.epsilon
+        if self.propbiasW == "W4":
+            self.propbias = 0.5 + (-self.C + 2) * self.epsilon 
+        if self.propbiasW == "W5":
+            self.propbias = 0.5 + (self.C2) * self.epsilon 
+            
+        if prop2biasW == "W1":
+            self.prop2bias = 0.5 - self.epsilon
+        if prop2biasW == "W3":
+            self.prop2bias = 0.5 + self.C * self.epsilon
+        if prop2biasW == "W4":
+            self.prop2bias = 0.5 + (-self.C + 2) * self.epsilon 
+        if prop2biasW == "W5":
+            self.prop2bias = 0.5 + (self.C2) * self.epsilon 
+        
+        #test propaganda positions via the line below
+        #print(f"P1 $\Omega$: {self.propbias} \nP2 $\Omega$: {self.prop2bias}")    
+            
+        self.propagandist = None
+        self.propagandist2 = None
+        
+        #this will track convergence, if the scientists converge it will be changed to "1"
+        self.converged = 0
+        #track round converged for all trials in this list
+        self.round_converged = []
+        self.avg_round = None
+        self.portion_converged = None
+        self.st_dev = None
+        
+        #gives prop resources in terms of "spins" binom_n, which is a proportion of the population's spins
+        #important only for "science" function of propagandist
+        self.propresources = propresourcespercent * (self.popsize * self.binom_n)
+        self.propbinomn = propbinomn
+        #gives prop resources in terms of "spins" binom_n, which is a proportion of the population's spins
+        self.prop2resources = prop2resourcespercent * (self.popsize * self.binom_n)
+        self.prop2binomn = prop2binomn
+        
+        #initialize to track the belief of policymakers at the end of the trial
+        self.beliefPolicyTrial = None
+        #list to track the belief accross many trials
+        self.beliefPolicyAcrosseTrials = []
+        #aggregate belief, used to hold a value
+        self.totPolicybelief = None
+        
+        #list to track belief for non-converged scenario
+        self.beliefP_non_converged = []
+        #list to track belief for converged
+        self.beliefP_converged = []
+        
+        #IDK WHAT THIS DOES
+        self.quickcheck = []
+        #scientists either have "none" or "select"
+        #select is the method of publication using credible intervals
+        self.sci_strat = sci_strat
+        
+        #when scientists are selectively sharing, this controls how many scientists employ the strategy
+        self.portion_selecting = portion_selecting
+        self.num_selective_scientists = round(portion_selecting * self.popsize)
+        
+        
+        
+    def round(self):
+        for x in self.Scientists:
+            #if the scientist believes that the P(B) > 0.5, then she tests B for this round
+            if (x.belief) >= 0.5:
+                #result is produced via binomial distribution
+                x.result = binomial(self.binom_n, 0.5 + self.epsilon)
+                
+                #if scientists are selecting, use update without sharing
+                if x.strat == "select":
+                    #gets result as a percent given between 0 and 1 rather than a raw number of successes
+                    normalize_result = x.result / self.binom_n
+                    
+                    #generate the confidence interval of the player to see if he should throw out result
+                    posterior_distribution = stats.beta(x.alpha_posterior, x.beta_posterior)
+                    confidence_interval = posterior_distribution.ppf([x.CI_lb, x.CI_ub])
+                    
+                    #if the result is outside of the predetermined prior credible interval, then it will not be shared
+                    if(normalize_result < (confidence_interval[0]) or normalize_result > (confidence_interval[1])):
+                        #If the result obtained by the scientist is not within the interval defined by C_lb and C_ub
+                        #then the scientist discards the result (after updating on it themselves)
+                        x.updateNoShare(x.result, self.binom_n, self.epsilon, self.C)
+                        x.result = None
+                        
+                        
+                #all public results are recorded by propagandist
+                #this excludes results that scientists "hid" in the "select" method
+                if x.result is not None:
+                    self.propagandist.roundresults.append(x.result)
+                    self.propagandist2.roundresults.append(x.result)
+            else:
+                x.result = None
+        
+        #scientists update from friends list results
+        for x in self.Scientists:
+            x.update(self.binom_n, self.epsilon, self.C)
+        
+        #policymakers update from friends list results
+        for x in self.policymakers:
+            x.update(self.binom_n, self.epsilon,self.C)
+            
+        #depending on strategy, propagandist1 will employ their propaganda methods
+        if self.propstrat == "select" or self.propstrat == "none":
+            #propagandists curate all the scientific data to present the good findings to policymakers
+            self.propagandist.selectshare(self.epsilon, self.binom_n)
+            #policymakers update according to the list provided by the propagandists (who are selectively sharing stuff they like)
+            for x in self.policymakers:
+                x.propUpdate(self.binom_n, self.epsilon, self.C, self.propagandist.curatedresults)       
+        if self.propstrat == "science":
+            #propagandist performs their own experiment
+            self.propagandist.propscience(self.propresources, self.propbinomn, self.epsilon)
+            for x in self.policymakers:
+                x.propUpdate(self.propbinomn, self.epsilon,self.C, self.propagandist.curatedresults)
+                
+        #ditto for propagandist2
+        if self.prop2strat == "select" or self.prop2strat == "none":
+            #propagandists curate all the scientific data to present the good findings to policymakers
+            self.propagandist2.selectshare(self.epsilon, self.binom_n)
+            #policymakers update according to the list provided by the propagandists (who are selectively sharing stuff they like)
+            for x in self.policymakers:
+                x.propUpdate(self.binom_n, self.epsilon, self.C, self.propagandist2.curatedresults)  
+        if self.prop2strat == "science":
+            #propagandist performs their own experiment
+            self.propagandist2.propscience(self.prop2resources, self.prop2binomn, self.epsilon)
+            for x in self.policymakers:
+                x.propUpdate(self.propbinomn, self.epsilon,self.C, self.propagandist2.curatedresults) 
+        #print(self.propagandist.curatedresults)
+        
+        #reset the propagandist round results:
+        self.propagandist.roundresults = []
+        self.propagandist.curatedresults = []
+        self.propagandist2.roundresults = []
+        self.propagandist2.curatedresults = []
+
+    def trial(self):
+        #clearing our lists of Scientists, policy makers, etc
+        self.Scientists = []
+        self.policymakers = []
+        self.propagandist = None
+        
+        for x in range(self.popsize):
+            #generate random priors for scientist's beta and alpha.  Choosing low prior belief
+            float1 = np.random.uniform(0, 1) * np.random.randint(1,5+1)
+            float2 = np.random.uniform(0, 1) * np.random.randint(1,5+1)
+            
+            #determine which scientists will employ "select" strategy to allow analysis of portions of scientists selecting
+            if self.sci_strat == "select":
+                #the first scientists created will be "select"
+                if x < self.num_selective_scientists:
+                    self.Scientists.append(Scientist(float1, float2, self.CI_lb, self.CI_ub, self.epsilon, "select"))    
+                #the rest will be epistemically "ideal"
+                else:
+                    self.Scientists.append(Scientist(float1, float2, self.CI_lb, self.CI_ub, self.epsilon, "none"))
+            else:
+                self.Scientists.append(Scientist(float1, float2, self.CI_lb, self.CI_ub, self.epsilon, self.sci_strat))
+        
+        #generate policymakers
+        for x in range(self.policysize):
+            #Initialize polizymakers priors
+            float1 = np.random.uniform(0, 1) * np.random.randint(1,5+1)
+            float2 = np.random.uniform(0, 1) * np.random.randint(1,5+1)
+            
+            #creates policymakers with uniform random initial degree of beliefW2 in world 2
+            self.policymakers.append(PolicyMaker(float1, float2, self.CI_lb, self.CI_ub))
+            
+        #initialize propagandists with given strategy and bias (Omega in the analysis)
+        self.propagandist = Propagandist(self.propbias, self.propstrat)
+        self.propagandist2 = Propagandist(self.prop2bias, self.prop2strat)
+        
+        #generate friends lists, cycle and complete method taken directly from Rosenstock code
+        #wheel added myself
+        for x in range(self.popsize):
+            if self.network == "cycle":
+                self.Scientists[x].friends = [self.Scientists[x], self.Scientists[(x - 1) % self.popsize], self.Scientists[(x + 1) % self.popsize]]
+            if self.network == "complete":
+                self.Scientists[x].friends = self.Scientists
+            if self.network == "wheel":
+                if x == self.popsize - 1:
+                    self.Scientists[x].friends = self.Scientists
+                else:
+                    self.Scientists[x].friends = [self.Scientists[x], self.Scientists[(x - 1) % (self.popsize-1)], self.Scientists[(x + 1) % (self.popsize-1)]]
+            #print(len(self.Scientists[x].friends))
+         
+        #generate unique random integers to add scientist at that position to friends list
+        for x in self.policymakers:
+            numbers = np.random.choice(self.popsize, size=self.sciconnections, replace=False)
+            
+            #add connections based on random list
+            for z in range(self.sciconnections):
+                x.friends.append(self.Scientists[numbers[z]])
+            #To test if friends are being created properly, uncomment below and the following formatted string:
+            #print(f'Friends: Policymaker {self.policymakers.index(x)}')
+            #print(len(x.friends))
+        
+        #initialize the propagandist with scientist 'friends'
+        #propagandist knows all scientists and reports to all policymakers
+        self.propagandist.scifriends = self.Scientists
+        self.propagandist.policyfriends = self.policymakers
+        #ditto with propagandist2
+        self.propagandist2.scifriends = self.Scientists
+        self.propagandist2.policyfriends = self.policymakers
+        
+        #re-initialize variables to avoid leaking data between trials
+        self.totPolicybelief = 0
+        self.didConverge = False
+        
+        #round watcher tracks the current round to allow plotting on consistent intervals
+        round_watcher = 0
+        #run 1000 rounds
+        for i in range(1000):
+            self.round()
+            round_watcher = round_watcher + 1
+            #every X rounds (30 here), plot the beta distributions of all scientists and the policymaker
+            #good for observing game
+            if round_watcher % 30 == 0:
+                
+                plt.figure(figsize=(8, 5))
+                #each scientist has their beta distribution drawn out as a pdf and plotted with 1000 points
+                for z in self.Scientists:
+                    x_vals = np.linspace(0, 1, 1000)
+                    z.posterior_distribution = stats.beta(z.alpha_posterior, z.beta_posterior)
+                    z.pdf_values = z.posterior_distribution.pdf(x_vals)
+                    z.confidence_interval = z.posterior_distribution.ppf([z.CI_lb, z.CI_ub])
+                    plt.plot(x_vals, z.pdf_values, color='red', lw=2)
+                #ditto with policymakers
+                for z in self.policymakers:
+                    z.posterior_distribution = stats.beta(z.alpha_posterior, z.beta_posterior)
+                    z.pdf_values = z.posterior_distribution.pdf(x_vals)
+                    z.confidence_interval = z.posterior_distribution.ppf([z.CI_lb, z.CI_ub])
+                    plt.plot(x_vals, z.pdf_values, color='blue', lw=2)
+                # Fill in the confidence interval for visualization
+                plt.fill_between(x_vals, z.pdf_values, where=(x_vals >= z.confidence_interval[0]) & (x_vals <= z.confidence_interval[1]), color='lightblue')
+                plt.title(f'Posterior Distribution of Probability of Winning | {self.sci_strat} | {self.sci_conf} | {self.sci_SD}')
+                plt.xlabel('Probability of Winning')
+                plt.ylabel('Probability Density')
+                plt.grid(True)
+                #include assymptotes ate true P(B) and propaganda positions to visualize relative effects
+                plt.axvline(0.5 + self.epsilon, color='red', linestyle='dashed', label='x = 0.5 + eps')
+                plt.axvline(0.5 - self.epsilon, color='green', linestyle='dashed', label='x = 0.5 - eps')
+                plt.axvline(0.5 + self.C * self.epsilon, color='orange', linestyle='dashed', label=f'x = 0.5 + {C} * eps')
+                #use xlim to focus on smaller region
+                #plt.xlim(0.5 - self.epsilon - 0.02, 0.5 + self.C * self.epsilon + 0.02)
+                # Show the plot
+                plt.show()
+                
+            #generate the 99% confidence interval for the scientists to test convergence
+            for x in self.Scientists:
+                # Create a beta distribution object with shape parameters alpha_posterior and beta_posterior
+                x.posterior_distribution = stats.beta(x.alpha_posterior, x.beta_posterior)
+                # Calculate the 99% confidence interval (0.005 and 0.995 percentiles)
+                x.guarantee_interval = x.posterior_distribution.ppf([0.025, 0.975])
+                # Calculate the length of the 95% confidence interval
+                x.CI_len = x.guarantee_interval[1] - x.guarantee_interval[0]
+                
+            #test if all scientists have tight enough confidence intervals and mean belief within arbitrary "convergence" range
+            if all(x.CI_len < (np.abs(0.5*(self.epsilon)*(self.C -1)) and np.abs(0.5*(self.epsilon))) for x in self.Scientists):
+                if all(np.abs((y.belief - (0.5+self.epsilon))) < (np.abs(0.25*(self.epsilon)*(self.C - 1)) and np.abs(0.25*(self.epsilon))) for y in self.Scientists):
+                    #plt.figure(figsize=(8, 5))
+                    for z in self.policymakers:
+                        #sum all the policymaker beliefs to get average
+                        self.totPolicybelief = self.totPolicybelief + z.belief
+                    
+                    #these variables for analysis are pulled from Rosenstock
+                    self.converged += 1
+                    self.round_converged.append(i+1)
+                    self.didConverge = True
+                    #end game if scientists converge
+                    break
+            #if scientists all believe A, they did not converge and the game ends
+            if all((x.belief) < 0.5 for x in self.Scientists):
+                break
+        
+        #if the scientists did not converge, update relevant trackers
+        if self.didConverge == False:
+            for z in self.policymakers:
+                self.totPolicybelief = self.totPolicybelief + z.belief
+            #self.beliefP_non_converged.append(np.abs((self.totPolicybelief / self.policysize) - (0.5+self.epsilon)))
+            self.beliefP_non_converged.append(((self.totPolicybelief / self.policysize) - (0.5+self.epsilon)))
+        #if scientists did converge, update relevant trackers
+        if self.didConverge == True:
+            #self.beliefP_converged.append(np.abs((self.totPolicybelief / self.policysize) - (0.5+self.epsilon)))
+            self.beliefP_converged.append(((self.totPolicybelief / self.policysize) - (0.5+self.epsilon)))
+        self.beliefPolicyTrial = self.totPolicybelief/self.policysize
+
+
+    def run(self, times):
+        self.times = times
+        #tracks current trial to provide runtime indicator
+        self.trialtracker = 0
+        
+        #run as many trials as specified with "times"
+        for i in range(times):
+            self.trial()
+            self.trialtracker = self.trialtracker + 1
+            #every X trials (100 here), print the current trial along with other indicators as needed
+            #good for keeping track of relative runtime of simulation
+            if self.trialtracker % 20 == 0:
+                print(f"Trial: {self.trialtracker} | eps val: {self.epsilon}")
+                
+            #if you want output belief in absolute value terms
+            self.beliefPolicyAcrosseTrials.append(np.abs(self.beliefPolicyTrial - (0.5 + self.epsilon)))
+            #if you want raw belief value
+            #self.beliefPolicyAcrosseTrials.append((self.beliefPolicyTrial - (0.5 + self.epsilon)))
+            #the following will help check if any given trial converged or not to track the effects of changes in code
+            '''if self.didConverge:
+                print(f"Converged: {self.didConverge} Policy: {self.beliefPolicyTrial - (0.5+self.epsilon)}, False = {self.beliefPolicyTrial - (0.5+ self.C* self.epsilon)}")
+            else:
+                print(f"Converged: {self.didConverge} Policy: {self.beliefPolicyTrial - (0.5+self.epsilon)}")
+                print("Uh, oh")'''
+        
+        #normalize the number of trials converged to get the percent of trials converged
+        self.portion_converged = float(self.converged)/float(self.times)
+        
+        #if scientists converged in some trials, track the average round converged
+        #this is directly from Rosenstock
+        if self.converged > 0:
+            self.avg_round = mean(self.round_converged)
+            self.st_dev = std(self.round_converged)
+        else:
+            self.avg_round = "na"
+            self.st_dev = "na"
+        #runs "times" number of trials with different initial random degrees of beliefW2
+
+#this method was taken from Rosenstock's code and contains the same structure             
+class Weatherall_Record:
+    def __init__(self, trials, population_sizes, epsilon_sizes, network_types, binomial_n, policysize, sciconnections, propstrat, propbias, propbinomn, propresourcepercent, C,C2, prop2strat, prop2bias, prop2binomn, prop2resourcepercent, strats, sci_strat, sci_conf, Sci_SD, portion_selecting):
+        
+        #sets number of trials
+        self.trials = trials
+        #sets num scientists
+        self.population_sizes = population_sizes
+        self.epsilon_sizes = epsilon_sizes
+        self.network_types = network_types
+        self.binomial_n = binomial_n
+        self.policysize = policysize
+        self.sciconnections = sciconnections
+        self.propstrat = propstrat
+        self.propbias = propbias
+        
+        self.prop2strat = prop2strat
+        self.prop2bias = prop2bias
+        self.C = C
+        self.C2 = C2
+        
+        self.portion_selecting = portion_selecting
+    def record_run(self, rounds, file_name):
+        self.rounds = rounds
+        self.file_name = file_name
+        with open(self.file_name, 'a') as f:
+            writer = csv.writer(f)
+            writer.writerows([["Trials","population size", "network type", "binomial n", "epsilon W2bvalue", "Number of Policymakers", "Percent of Scientific Community Consulted", "Strategy of Propagandist", "Bias of Propagandist", "Resources of Propagandist", "propbinomn", "C", "C2", "Bias of Propagandist 2", "Resources of Propagandist 2", "prop2binomn", "SciStrat", "Confidence Value", "Sci_SD","Portion of scientists selecting" ,"Policymaker Belief","Policymaker Belief Converged", "Policymaker Belief non-converged","Relative Policymaker Belief (Omega_effect)","Omega_effect converged","Omega_effect non-converged", "portion of scientist converged", "average round converged", "standard deviation"]])
+        #creating some markers to see where I am:
+        self.popsizetracker = 0
+        self.epsizetracker = 0
+        self.nettracker = 0
+        self.binomntracker = 0
+        self.policysizetracker = 0
+        self.sciconnectionstracker = 0
+        self.propstrattracker = 0
+        self.propbiastracker = 0
+        
+        self.propbinomn = propbinomn
+        self.propresources = propresourcepercent
+        self.prop2binomn = prop2binomn
+        self.prop2resources = prop2resourcepercent
+        
+        #work on in network plot:
+        self.policybeliefW1 = []
+        self.policybelief = []
+        self.policybeliefW3 = []
+        self.scirelate = []
+        
+        self.strats = strats
+        self.sci_strat = sci_strat
+        self.sci_conf = sci_conf
+        self.sci_SD = sci_SD
+        
+        for x in self.population_sizes:
+            self.popsizetracker = self.popsizetracker + 1
+            self.epsizetracker = 0
+            for y in self.epsilon_sizes:
+                self.epsizetracker = self.epsizetracker + 1
+                self.nettracker = 0
+                for z in self.network_types:
+                    self.nettracker = self.nettracker + 1
+                    self.binomntracker = 0
+                    for n in self.binomial_n:
+                        self.binomntracker = self.binomntracker + 1
+                        self.policysizetracker = 0
+                        for a in self.policysize:
+                            self.policysizetracker = self.policysizetracker + 1
+                            self.sciconnectionstracker = 0
+                            for b in self.sciconnections:
+                                self.sciconnectionstracker = self.sciconnectionstracker + 1
+                                self.propstrattracker = 0
+                                #for c in self.propstrat:
+                                for c in self.strats:
+                                    self.propstrattracker = self.propstrattracker + 1
+                                    for d in self.propbias:
+                                        for e in self.propresources:
+                                            for f in self.propbinomn:
+                                                for g in self.C: 
+                                                    for g2 in self.C2:
+                                                    #for h in self.prop2strat:
+                                                        for i in self.prop2bias:
+                                                            for j in self.prop2resources:
+                                                                for k in self.sci_strat:
+                                                                    for l in self.sci_conf:
+                                                                        for m in self.sci_SD:
+                                                                            for o in self.portion_selecting:
+                                                                                
+                                                                                print('PopSize: {}/{}, Eps: {}/{}, Network: {}/{}, Binom: {}/{}, PolSize: {}/{}, SciPerc: {}/{}'.format(self.popsizetracker,len(self.population_sizes),self.epsizetracker,len(self.epsilon_sizes),self.nettracker,len(self.network_types), self.binomntracker,len(self.binomial_n), self.policysizetracker, len(self.policysize),self.sciconnectionstracker,len(self.sciconnections)))
+                                                                                #if you want to have effective propagandists, use the fwhm code and check the C_val of propaganda neede
+                                                                                #to make it work
+                                                                                value = 0.5 + y
+                                                                                fwhm = 2 * np.sqrt(n * value * (1 - value))
+                                                                                hwhm = fwhm/2
+                                                                                mean = n * value
+                                                                                
+                                                                                p_val = (mean + hwhm / 2)/n
+                                                                                C_val = ((p_val - 0.5)/y)
+                                                                                C_val = g
+                                                                                print(f"C: {C_val} C2: {g2}")
+                                                                                #game = Game(x, z, n, y, a, b,c,d, e, n, g, h, i, j, n)
+                                                                                game = Game(x, z, n, y, a, b,c,d, e, n, g,g2, i, j, n,k,l,m,o)
+                                                                                game.run(self.rounds)
+                                                                                
+                                                                                #variable for mean policy belief over all trials for this set of params
+                                                                                pol_b = np.mean(game.beliefPolicyAcrosseTrials)                                        
+                                                                                #mean belief for only games converged (scientists all came to true belief)
+                                                                                pol_b_conv = np.mean(game.beliefP_converged)
+                                                                                #mean belief for nonconverged
+                                                                                pol_b_nonconv = np.mean(game.beliefP_non_converged)
+                                                                                
+                                                                                #This allows for measurement of effect of propaganda:
+                                                                                #pol_b = mean_belief_policymaker - actual_P(b) == "belief of policy in terms of distance from truth"
+                                                                                #((y)*(C-1)) === "distance between truth and propagandists position"
+                                                                                #an eff_of_prop = 0 suggests that propaganda had 0 effect and policymakers belief P(b)
+                                                                                #an eff_of_prop = 1 suggests that propagandist had effect of perfectly aligning policymaker belief with Omega (propagandist position about P(b))
+                                                                                eff_of_prop = pol_b / ((y)*(C_val-1))
+                                                                                eff_of_prop_conv = pol_b_conv / ((y)*(C_val-1))
+                                                                                eff_of_prop_nonconv = pol_b_nonconv / ((y)*(C_val-1))
+                                                                                   
+                                                                                
+                                                                                with open(self.file_name, 'a') as f:
+                                                                                    writer = csv.writer(f)
+                                                                                    writer.writerows([[self.trials,x, z, n, y, a, b,c,d, e, n, C_val,g2, i, j, n, k, l,m, o, pol_b, pol_b_conv, pol_b_nonconv, eff_of_prop,eff_of_prop_conv,eff_of_prop_nonconv,game.portion_converged, game.avg_round, game.st_dev]])
+                                                                                    #runs for various initial conditions, prints outcome and creates csv file
+
+        
+
+#how many scientists in the network
+pop_sizes_test = [10]
+ep_sizes_test = [0.05]
+network_types_test = ["complete"]
+binomial_n_test = [30]
+policysize = [1]
+#sci connections is a percentage given as a float btw 0 and 1
+sciconnections = [0.3]
+
+#the strategy of the propagandist.  options are "science" for propagandists running their own experiments
+#cont: "select" for propagandists that selectively share scientific data to policymakers
+#cont: and "none" for games without propagandists
+propstrat = ["none","select"]
+#propagandist #1's bias.  W1 = 0.5-eps, W2 = 0.5+eps (the truth), and W3 = 0.5+C*eps ("correct" that machine B is better, but wrong about how much)
+#W4 = 0.5 + (-C + 2) * eps ; W5 = 0.5 + (C2 * eps)
+propbias = ["W5"]
+propresourcepercent = [2]
+propbinomn = [100]
+
+prop2strat = ["select","none"]
+prop2bias = ["W3"]
+prop2resourcepercent = [0.5]
+#this relates to "science" strategy for propaganda
+prop2binomn = [100]
+C = [2,4,6,8,10]
+C2 = [0,-2,-4,-6,-8]
+
+#strats are either "select" or "none"
+#select is where scientists choose whether or not to share data depending on if that data fits their prior belief
+sci_strat = ["select"]
+#level which determines if the scientist will publish her data
+#0.5 means the scientist will only publish data within 50% credible interval
+sci_conf = [0.5]
+#this is the portion of scientists selectively sharing data to their colleagues.  
+# If sci_strat is "none" this does nothing
+portion_selecting = [0]
+#This does nothing, used to determine standard deviation for selecting, but instead we do 50% credibile interval
+sci_SD = [None]
+
+#strats = [["none", "none"],["science","none"],["none","science"],["select", "none"],["none","select"],["science","science"],["select","select"]]
+strats = [["select","select"]]
+trials = 100
+
+record_test = Weatherall_Record(trials, pop_sizes_test, ep_sizes_test, network_types_test, binomial_n_test, policysize, sciconnections, propstrat, propbias, propbinomn, propresourcepercent, C, C2, prop2strat, prop2bias, propbinomn, prop2resourcepercent, strats, sci_strat, sci_conf,sci_SD, portion_selecting)
+
+record_test.record_run(trials, "filename.csv")
+### runs 100 times for each combination of paramters in test lists above. 
+### we ran 10000+ times for many more parameter W2bvalues, but this takes a long time
+### the first entry here is the number of rounds run for each tuple (pop_sizes, ep_sizes, etc...), the second is file path
+### output will be a csv file with entries for: "population size", "network type", "epsilon W2bvalue", "binomial n", "portion converged", "average round converged", "standard deviation"
