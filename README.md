@@ -7,12 +7,12 @@ The code was initially adapted to reproduce the results of Weatherall, O'Connor,
 
 # Currently, this code has the following capabilities:
 1. Propaganda similar to the Weatherall et. al model, but using a beta approximation rather than discrete Bayesian inference:
-     a. This includes both the selective sharing and biased production strategies
-     b. Propagandists in this code have adjustable beliefs and can promote true or false positions
+       This includes both the selective sharing and biased production strategies.
+       Propagandists in this code have adjustable beliefs and can promote true or false positions.
 2. Competitive propaganda:
-     a. Technically, this code has the ability to establish 2 propagandists that promote any position between 0 and 1, but this is most interesting when they compete and promote positions at either extreme relative to the truth.
+     Technically, this code has the ability to establish 2 propagandists that promote any position between 0 and 1, but this is most interesting when they compete and promote positions at either extreme relative to the truth.
 3. Confirmation bias as a strategy to defeat propaganda:
-     a. In working with this code, I found the unique strategy for scientists to defeat propagandists: they only publish results that confirm their biases
-     b. Confirmation bias in this model is established using prior credible intervals
+       In working with this code, I found the unique strategy for scientists to defeat propagandists: they only publish results that confirm their biases.
+       Confirmation bias in this model is established using prior credible intervals.
    
-As of 10/20/23, this code still requires some "clean up" for readability.  Contact me via email if you stumble across this page and need clarification about some function or method.
+As of 11/15/23, this code still requires some "clean up" for readability.  Contact me via email if you stumble across this page and need clarification about some function or method.
