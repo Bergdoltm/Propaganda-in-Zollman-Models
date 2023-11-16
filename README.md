@@ -1,5 +1,5 @@
 # Propaganda-in-Zollman-Models
-The base of this code comes from Rosenstock 2017, who publicly released code for the traditional Zollman model (without propagandists).  This can be found here: https://www.dropbox.com/sh/lyk7sd6h8459obp/AADxMzMcEDy--K1Odq9rlM97a?dl=0
+The base of this code comes from Rosenstock et al. 2017, who publicly released code for the traditional Zollman model (without propagandists).  This can be found here: https://www.dropbox.com/sh/lyk7sd6h8459obp/AADxMzMcEDy--K1Odq9rlM97a?dl=0
 
 I developed this work by expanding her code, and, as such, this code reflects the same structure and includes some of the same basic methods as hers.  I try to call these out with in-line comments.
 
