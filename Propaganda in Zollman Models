@@ -1,15 +1,11 @@
 # -*- coding: utf-8 -*-
 """
-Created on Tue Aug  1 21:22:59 2023
+AUTHOR: MICHAEL BERGDOLT
+NEW?: SCROLL TO THE BOTTOM, SET "TRIALS = 1" AND TOY WITH PARAMETERS TO LEARN HOW THE CODE FUNCTIONS
 
-@author: 19199
-"""
-
-# -*- coding: utf-8 -*-
-"""
-Created on Sat Jul  8 13:07:21 2023
-
-@author: 19199
+CREDIT TO SARITA ROSENSTOCK, WHO PUBLICLY RELEASED CODE FOR A BASE ZOLLMAN MODEL.  THIS PROJECT WAS BUILT BY EXPANDING AND PLAYING WITH HER CODE.
+SOME OF HER METHODS AND STRUCTURE REMAINS, AND I CALL TRY TO CALL OUT WHEN I USE ORIGINAL METHODS
+HER CODE CAN BE FOUND HERE: 
 """
 
 #!/usr/bin/env python2.7
@@ -189,7 +185,6 @@ class Scientist:
         #as such, the "friends" will not see this "result"
         result = result
         
-        
         if not result == None:
             self.alpha_posterior = self.alpha_prior + result
             self.beta_posterior = self.beta_prior + self.n - result
@@ -220,6 +215,8 @@ class Game:
         
         #takes the credible interval and converts it to upper and lower bounds
         #eg: 99% CI -> (0.005, 0.995)
+        #this is used as a proxy for scientific convergence
+        #when this interval is sufficiently small, it is taken to indicate convergence
         self.CI_lb = round((1 - sci_conf)/2,4)
         self.CI_ub = round(1 - (1-sci_conf)/2,4)
         #print(f"lb: {self.CI_lb}, ub: {self.CI_ub}")
@@ -246,6 +243,7 @@ class Game:
         
         #propbias is the bias of the propagandist, W1 is 0.5-eps, W3 is 0.5+C*eps
         #W2 would be actual truth, so it is not an option
+        #when learning about the model, it is useful to set prop1 to "W1" and prop2 to "W3"
         self.propbiasW = propbiasW
         if self.propbiasW == "W1":
             self.propbias = 0.5 - self.epsilon
@@ -308,6 +306,19 @@ class Game:
         #when scientists are selectively sharing, this controls how many scientists employ the strategy
         self.portion_selecting = portion_selecting
         self.num_selective_scientists = round(portion_selecting * self.popsize)
+        
+        #for visualizing game:
+        # Initialize a dictionary to store lists of beliefs (belief each round)
+        self.scientist_beliefs = {}
+        self.policy_beliefs = {}
+
+        # Loop through the range of players and create lists dynamically
+        for i in range(self.popsize):
+            self.scientist_beliefs[f"Player{i}_belief"] = []
+        for i in range(self.policysize):
+            self.policy_beliefs[f"Policy{i}_belief"] = []
+        
+        
         
         
         
@@ -378,7 +389,7 @@ class Game:
                 x.propUpdate(self.propbinomn, self.epsilon,self.C, self.propagandist2.curatedresults) 
         #print(self.propagandist.curatedresults)
         
-        #reset the propagandist round results:
+        #reset the propagandist(s) round results:
         self.propagandist.roundresults = []
         self.propagandist.curatedresults = []
         self.propagandist2.roundresults = []
@@ -408,7 +419,7 @@ class Game:
         
         #generate policymakers
         for x in range(self.policysize):
-            #Initialize polizymakers priors
+            #Initialize polizymakers priors (again low priors)
             float1 = np.random.uniform(0, 1) * np.random.randint(1,5+1)
             float2 = np.random.uniform(0, 1) * np.random.randint(1,5+1)
             
@@ -460,11 +471,20 @@ class Game:
         round_watcher = 0
         #run 1000 rounds
         for i in range(1000):
+            
+            #FOR VISUALIZATION:
+            for i in range(self.popsize):
+                self.scientist_beliefs[f"Player{i}_belief"].append(self.Scientists[i].belief)
+            for i in range(self.policysize):
+                self.policy_beliefs[f"Policy{i}_belief"].append(self.policymakers[i].belief)
+                
+            
             self.round()
             round_watcher = round_watcher + 1
             #every X rounds (30 here), plot the beta distributions of all scientists and the policymaker
             #good for observing game
-            if round_watcher % 30 == 0:
+            #comment out or increase the "round_watcher" to increase efficiency
+            if round_watcher % 20 == 0:
                 
                 plt.figure(figsize=(8, 5))
                 #each scientist has their beta distribution drawn out as a pdf and plotted with 1000 points
@@ -533,6 +553,36 @@ class Game:
             #self.beliefP_converged.append(np.abs((self.totPolicybelief / self.policysize) - (0.5+self.epsilon)))
             self.beliefP_converged.append(((self.totPolicybelief / self.policysize) - (0.5+self.epsilon)))
         self.beliefPolicyTrial = self.totPolicybelief/self.policysize
+        
+        #FOR VISUALIZATION:
+        for key, value in self.scientist_beliefs.items():
+            plt.plot(value, label=key, color='red')      
+        for key, value in self.policy_beliefs.items():
+            plt.plot(value, label=key, color='blue')
+        # Adding a horizontal asymptote at 0.5 + self.epsilon
+        plt.axhline(y=0.5 + self.epsilon, color='blue', linestyle='--', label='Truth ($p_{b}$)')
+        if self.propstrat != "none":
+            # Adding a horizontal asymptote at 0.5 + self.epsilon
+            plt.axhline(y=self.propbias, color='green', linestyle='--', label='$\Omega$')
+
+        if self.prop2strat != "none":
+            # Adding a horizontal asymptote at 0.5 + self.epsilon
+            plt.axhline(y=self.prop2bias, color='orange', linestyle='--', label='$\Omega$')
+
+        # Set the y-axis limits
+        plt.ylim(0.45, 0.65)
+        # Customize the plot
+        plt.xlabel('Round')
+        plt.ylabel('Belief')
+        plt.title('Scientist and Policymaker Beliefs During Trial')
+        # Create separate legends for the horizontal asymptotes
+        #plt.legend(loc='upper left')  # Legend for asymptotes
+        #plt.legend(loc='lower right', bbox_to_anchor=(1, 0.1), fontsize='small')  # Legend for players and policy beliefs
+        plt.grid(True)
+        # Save the plot as a PNG file
+        plt.savefig("Plot_of_Beliefs" + '.png', format='png', dpi=300)  # dpi parameter sets the image resolution
+        plt.show()
+        
 
 
     def run(self, times):
@@ -702,31 +752,28 @@ class Weatherall_Record:
         
 
 #how many scientists in the network
-pop_sizes_test = [10]
+pop_sizes_test = [5]
 ep_sizes_test = [0.05]
-network_types_test = ["complete"]
+network_types_test = ["cycle"]
 binomial_n_test = [30]
 policysize = [1]
 #sci connections is a percentage given as a float btw 0 and 1
 sciconnections = [0.3]
 
-#the strategy of the propagandist.  options are "science" for propagandists running their own experiments
-#cont: "select" for propagandists that selectively share scientific data to policymakers
-#cont: and "none" for games without propagandists
-propstrat = ["none","select"]
+propstrat = []
 #propagandist #1's bias.  W1 = 0.5-eps, W2 = 0.5+eps (the truth), and W3 = 0.5+C*eps ("correct" that machine B is better, but wrong about how much)
 #W4 = 0.5 + (-C + 2) * eps ; W5 = 0.5 + (C2 * eps)
 propbias = ["W5"]
 propresourcepercent = [2]
 propbinomn = [100]
 
-prop2strat = ["select","none"]
+prop2strat = []
 prop2bias = ["W3"]
 prop2resourcepercent = [0.5]
 #this relates to "science" strategy for propaganda
 prop2binomn = [100]
-C = [2,4,6,8,10]
-C2 = [0,-2,-4,-6,-8]
+C = [2]
+C2 = [0]
 
 #strats are either "select" or "none"
 #select is where scientists choose whether or not to share data depending on if that data fits their prior belief
@@ -740,14 +787,13 @@ portion_selecting = [0]
 #This does nothing, used to determine standard deviation for selecting, but instead we do 50% credibile interval
 sci_SD = [None]
 
+#the strategy of the propagandist.  options are "science" for propagandists running their own experiments
+#cont: "select" for propagandists that selectively share scientific data to policymakers
+#cont: and "none" for games without propagandists
 #strats = [["none", "none"],["science","none"],["none","science"],["select", "none"],["none","select"],["science","science"],["select","select"]]
-strats = [["select","select"]]
-trials = 100
+strats = [["none","none"]]
+trials = 1
 
 record_test = Weatherall_Record(trials, pop_sizes_test, ep_sizes_test, network_types_test, binomial_n_test, policysize, sciconnections, propstrat, propbias, propbinomn, propresourcepercent, C, C2, prop2strat, prop2bias, propbinomn, prop2resourcepercent, strats, sci_strat, sci_conf,sci_SD, portion_selecting)
-
+#specify file name for results file
 record_test.record_run(trials, "filename.csv")
-### runs 100 times for each combination of paramters in test lists above. 
-### we ran 10000+ times for many more parameter W2bvalues, but this takes a long time
-### the first entry here is the number of rounds run for each tuple (pop_sizes, ep_sizes, etc...), the second is file path
-### output will be a csv file with entries for: "population size", "network type", "epsilon W2bvalue", "binomial n", "portion converged", "average round converged", "standard deviation"
