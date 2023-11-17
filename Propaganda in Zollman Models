@@ -311,7 +311,6 @@ class Game:
         # Initialize a dictionary to store lists of beliefs (belief each round)
         self.scientist_beliefs = {}
         self.policy_beliefs = {}
-
         # Loop through the range of players and create lists dynamically
         for i in range(self.popsize):
             self.scientist_beliefs[f"Player{i}_belief"] = []
@@ -484,7 +483,7 @@ class Game:
             #every X rounds (30 here), plot the beta distributions of all scientists and the policymaker
             #good for observing game
             #comment out or increase the "round_watcher" to increase efficiency
-            if round_watcher % 20 == 0:
+            if round_watcher % 200 == 0:
                 
                 plt.figure(figsize=(8, 5))
                 #each scientist has their beta distribution drawn out as a pdf and plotted with 1000 points
@@ -561,10 +560,10 @@ class Game:
             plt.plot(value, label=key, color='blue')
         # Adding a horizontal asymptote at 0.5 + self.epsilon
         plt.axhline(y=0.5 + self.epsilon, color='blue', linestyle='--', label='Truth ($p_{b}$)')
+        plt.axhline(y=0.5, color='purple', linestyle='--', label='Truth ($p_{b}$)')
         if self.propstrat != "none":
             # Adding a horizontal asymptote at 0.5 + self.epsilon
             plt.axhline(y=self.propbias, color='green', linestyle='--', label='$\Omega$')
-
         if self.prop2strat != "none":
             # Adding a horizontal asymptote at 0.5 + self.epsilon
             plt.axhline(y=self.prop2bias, color='orange', linestyle='--', label='$\Omega$')
@@ -791,7 +790,7 @@ sci_SD = [None]
 #cont: "select" for propagandists that selectively share scientific data to policymakers
 #cont: and "none" for games without propagandists
 #strats = [["none", "none"],["science","none"],["none","science"],["select", "none"],["none","select"],["science","science"],["select","select"]]
-strats = [["none","none"]]
+strats = [["none","select"]]
 trials = 1
 
 record_test = Weatherall_Record(trials, pop_sizes_test, ep_sizes_test, network_types_test, binomial_n_test, policysize, sciconnections, propstrat, propbias, propbinomn, propresourcepercent, C, C2, prop2strat, prop2bias, propbinomn, prop2resourcepercent, strats, sci_strat, sci_conf,sci_SD, portion_selecting)
