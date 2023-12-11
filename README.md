@@ -15,4 +15,5 @@ The code was initially adapted to reproduce the results of Weatherall, O'Connor,
        In working with this code, I found the unique strategy for scientists to defeat propagandists: they only publish results that confirm their biases.
        Confirmation bias in this model is established using prior credible intervals.
    
-As of 11/15/23, this code still requires some "clean up" for readability.  Contact me via email if you stumble across this page and need clarification about some function or method.
+As of 12/11/23, this code still requires substantial "clean up" for readability.  Contact me via email if you stumble across this page and need clarification about some function or method.
+My plan, ultimately, is to rewrite this from scratch to trim the substantial fat that built up while I experimented with a variety of different methods.
