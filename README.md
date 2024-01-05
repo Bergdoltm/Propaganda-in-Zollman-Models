@@ -6,7 +6,7 @@ I developed this work by expanding her code, and, as such, this code reflects th
 The code was initially adapted to reproduce the results of Weatherall, O'Connor, and Bruner 2018.  The code for the reproduced results is not in this repository, but I am happy to send it if you contact me at: mhbergdolt@gmail.com
 
 # Using the program:
-I don't recommend cloning this directly.  I run this code with a Python IDE (Spyder is my favorite for the live plots to "observe" the agents).
+I don't recommend cloning this directly (it appears some who have read my paper have tried this).  I run this code with a Python IDE (Spyder is my favorite for the live plots to "observe" the agents).
 If you want to test or use this code, copy it into a local file.  You will need to assign a filename and location for the data which can be edited on the last line.
 
 # Currently, this code has the following capabilities:
