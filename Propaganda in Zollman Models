@@ -48,7 +48,7 @@ class Propagandist:
         if propstrat == "science":
             self.propstrat = "science"
             
-            
+    #Method used to curate favorable results from honest Scientists        
     def selectshare(self, eps,n):
         #iterate through all the results collected this round
         for x in self.roundresults:
@@ -59,7 +59,8 @@ class Propagandist:
         #this makes the propagandist inert
         if self.propstrat == "none":
             self.curatedresults = []
-            
+
+    #Method for propagandists who conduct their own industry research, and then publish only the favorable outcomes        
     def propscience(self, propresources, propbinomn, eps):
         #this is the same epsilon which sets the actual P(B)
         self.epsilon = eps
@@ -119,7 +120,7 @@ class PolicyMaker:
         self.alpha_posterior = self.alpha_prior
         self.beta_posterior = self.beta_prior
         
-        
+    #Receives results from scientists in network, and updates belief according to beta inference    
     def update(self, n, eps,C):
         #updates Scientist belief according to a beta approximation
         
@@ -145,7 +146,7 @@ class PolicyMaker:
                 self.beta_prior = self.beta_posterior
                 #self.prior_distribution = self.posterior_distribution
     
-    #identical to update function, but using a list of float results provided by propagandist rather than a float            
+    #identical to update function, but uses a list of results provided by the propagandist rather than results from friends
     def propUpdate(self, propbinomn, eps,C, propresults):
         self.n = propbinomn
         self.eps = eps
@@ -176,7 +177,8 @@ class Scientist:
         self.beta_posterior = self.beta_prior
         
         self.strat = strat
-        
+
+    #this is only used for the strategy where scientists hide data, not relevant to the paper I've written (but neat)    
     def updateNoShare(self,result,n,eps,C):
         self.n = n
         self.eps = eps
@@ -192,7 +194,8 @@ class Scientist:
             
             self.alpha_prior = self.alpha_posterior
             self.beta_prior = self.beta_posterior
-        
+
+    #Receives results from scientists in network, and updates belief according to beta inference   
     def update(self, n, eps,C):
         self.n = n
         self.eps = eps
@@ -209,7 +212,9 @@ class Scientist:
 
 class Game:
     def __init__(self, popsize, network, binom_n, epsilon, policysize, sciconnections, propstrats, propbiasW, propresourcespercent, propbinomn, C,C2, prop2biasW, prop2resourcespercent, prop2binomn,sci_strat, sci_conf, sci_SD, portion_selecting):
-        
+
+        #Credible interval values used as a proxy for scientific convergence
+        #if every scientist's 99% credible interval is sufficiently tight around a value, then this indicates a sense in which the scientists have converged
         self.sci_conf = sci_conf
         self.sci_SD = sci_SD
         
@@ -220,11 +225,16 @@ class Game:
         self.CI_lb = round((1 - sci_conf)/2,4)
         self.CI_ub = round(1 - (1-sci_conf)/2,4)
         #print(f"lb: {self.CI_lb}, ub: {self.CI_ub}")
-        
+
+        #number of scientists
         self.popsize = popsize
+        #num policymakers (usually 1)
         self.policysize = policysize
+        #network type
         self.network = network
+        #takes a percentage relating how connected a policymaker is to the scientists and converts it to an integer value for number of scientists in network
         self.sciconnections = round(sciconnections * popsize)
+        #C is a poorly named constant.  It indicates the distance of propagandist belief from truth (Omega = 0.5+C*eps)
         self.C = C
         self.C2 = C2
         #print(self.sciconnections)
