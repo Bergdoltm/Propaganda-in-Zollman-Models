@@ -28,7 +28,7 @@ class Propagandist:
         #desiredbelief is the target probability that the propagandist wants to convince the policy makers is the true W2bvalue
         self.desiredbelief = desiredbelief
         
-        #degree of beliefW2 in World 2 (in which expected return for informative action is .5 + epsilon)
+        #will store results from current round
         self.roundresults = []
         
         #people who propagandist can pull results from, all scientists are usually on this list
@@ -88,7 +88,7 @@ class Propagandist:
         
 class PolicyMaker:
     def __init__(self, alpha_initial, beta_initial, CI_lb, CI_ub):
-        #initialize the beta approximation values with the random priors
+        #initialize the beta approximation values with random priors
         self.alpha_prior = alpha_initial
         self.beta_prior = beta_initial
         #initialize result [randomly determined in "Game.round()"]
@@ -107,6 +107,7 @@ class PolicyMaker:
         
         self.posterior_distribution = None
         #initializes pdf values
+        #can be used in visualizations
         self.pdf_values = None
         self.confidence_interval = None
         
@@ -122,15 +123,12 @@ class PolicyMaker:
         
     #Receives results from scientists in network, and updates belief according to beta inference    
     def update(self, n, eps,C):
-        #updates Scientist belief according to a beta approximation
-        
-        #incorporate binomial distribution values
         self.n = n
         self.eps = eps
 
         #run through the friends list
         for x in self.friends:
-            #if friend tested B, get it's data
+            #if friend tested B, get data
             if not x.result == None:
                 #updating alpha and beta parameters
                 self.alpha_posterior = self.alpha_prior + x.result
@@ -138,7 +136,7 @@ class PolicyMaker:
                 #^this is bayesian inference, but thanks to beta distribution priors
                 #the posterior distribution is also a beta distribution
                 
-                #mean of the beta distribution after result
+                #mean of the beta distribution after inference
                 self.belief = (self.alpha_posterior) / (self.alpha_posterior + self.beta_posterior)
                 
                 #new prior is the old posterior
