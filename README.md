@@ -9,6 +9,10 @@ The code was initially adapted to reproduce the results of Weatherall, O'Connor,
 I don't recommend cloning this directly through Git.  I run this code with a Python IDE (Spyder is my favorite for the live plots to "observe" the agents).
 If you want to test or use this code, copy it into a local file.  You will need to assign a filename and location for the data which can be edited on the last line.
 
+The trick, for new users, will be unwinding the web of names I use for initial parameters and test variables.  You're best bet for figuring out the code is through the visualization methode. Line 564 gives a visualization of mean beliefs of each agent throughout a trial.  This is good for tracking how a trial evolved after the fact.  I generally comment this out when not in use.  
+My favorite visualization is the "live" visual which can give round by round plots of agents' beta approximations.  This is on line 491.  Set the "X" in "if round_watcher % X" to your desired rate of producing these plots.  In other words, if set to "1", you will get a plot of each agent's beta approximation in each round (after updating on evidence).  If set to "5", you will get this plot at intervals of 5 rounds.
+Good luck!  I am happy to answer questions until I get to making this user friendly.
+
 # Currently, this code has the following capabilities:
 1. Propaganda similar to the Weatherall et. al model, but using a beta approximation rather than discrete Bayesian inference:
        This includes both the selective sharing and biased production strategies.
